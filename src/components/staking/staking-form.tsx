@@ -2,6 +2,7 @@
 
 import NftDrawer from "@/components/nft-drawer";
 import { NumberFormatter } from "@/components/number-formatter";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -54,10 +55,15 @@ export default function StakingForm({
     address: account.address,
   });
 
+  const poolMaxCapacity =
+    BigInt(staking.tokenCap) - BigInt(staking.tokenBalance);
+
   const minTokenAllowed =
     BigInt(staking.minTokenAllowed) - BigInt(position?.tokensStaked ?? 0);
-  const maxTokenAllowed =
+  const maxUserToken =
     BigInt(staking.maxTokenAllowed) - BigInt(position?.tokensStaked ?? 0);
+  const maxTokenAllowed =
+    maxUserToken < poolMaxCapacity ? maxUserToken : poolMaxCapacity;
   const minNftAllowed =
     BigInt(staking.minNftAllowed) - BigInt(position?.nftStaked.length ?? 0);
   const maxNftAllowed =
@@ -138,6 +144,43 @@ export default function StakingForm({
     return !isApprovedForAll.data;
   }, [isApprovedForAll, nftIds]);
 
+  const alert = useMemo(() => {
+    const tokenCap = BigInt(staking.tokenCap);
+    const tokenBalance = BigInt(staking.tokenBalance);
+    if (tokenCap === maxUint256) return null;
+    const percent = (tokenBalance * BigInt(100)) / tokenCap;
+
+    if (percent >= BigInt(100))
+      return (
+        <Alert>
+          <AlertTitle>❌ This staking pool is full</AlertTitle>
+          <AlertDescription>
+            You missed this one — check other pools to secure your spot.
+          </AlertDescription>
+        </Alert>
+      );
+    if (percent >= BigInt(90))
+      return (
+        <Alert>
+          <AlertTitle>🚨 Almost full!</AlertTitle>
+          <AlertDescription>
+            The staking pool is about to close. Stake now or risk missing out on
+            rewards.
+          </AlertDescription>
+        </Alert>
+      );
+    if (percent >= BigInt(50))
+      return (
+        <Alert>
+          <AlertTitle>🔥 The staking pool is filling up fast!</AlertTitle>
+          <AlertDescription>
+            Don’t miss your chance to earn — stake now before it’s too late.
+          </AlertDescription>
+        </Alert>
+      );
+    return null;
+  }, [staking]);
+
   const queryClient = useQueryClient();
   const client = useClient({ chainId: staking.chainId });
   const approveToken = useApproveToken();
@@ -207,6 +250,7 @@ export default function StakingForm({
     <Form {...form}>
       <form onSubmit={(e) => void handleSubmit(e)}>
         <div className="space-y-8">
+          {alert}
           <FormField
             control={form.control as unknown as Control<{ amount: string }>}
             name="amount"
@@ -224,18 +268,7 @@ export default function StakingForm({
                 </div>
                 <FormControl>
                   <div className="relative">
-                    <Input
-                      placeholder={`eg: ${
-                        maxTokenAllowed === maxUint256
-                          ? "100"
-                          : formatUnits(
-                              maxTokenAllowed,
-                              staking.depositToken?.decimals ?? 0
-                            )
-                      }`}
-                      type="number"
-                      {...field}
-                    />
+                    <Input placeholder="eg: 100" type="number" {...field} />
                     <Button
                       variant="outline"
                       type="button"
